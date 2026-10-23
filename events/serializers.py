@@ -19,17 +19,18 @@ class CreateBookingSerializer(serializers.ModelSerializer):
             'end_time': {'help_text': 'Дата та час завершення бронювання (UTC).'},
         }
 
-        def validate_start_time(self, value):
-            if value < timezone.now():
-                raise serializers.ValidationError("The start time must be a date in the future.")
-            return value
+    def validate_start_time(self, value):
+        if value < timezone.now():
+            raise serializers.ValidationError("The start time must be a date in the future.")
+        return value
 
-        def validate(self, data):
+    def validate(self, data):
+        if data.get('start_time') and data.get('end_time'):
             if data['start_time'] >= data['end_time']:
                 raise serializers.ValidationError({
-                "end_time": "End time must be later than start time."
+                    "end_time": "End time must be later than start time."
                 })
-            return data
+        return data
 
 class ResourceListSerializer(serializers.ModelSerializer):
     resource_type_name = serializers.CharField(source='resource_type.name', read_only=True)
