@@ -12,6 +12,12 @@ class CreateBookingSerializer(serializers.ModelSerializer):
     class Meta:
         model = Booking
         fields = ['client_name', 'client_email', 'start_time', 'end_time']
+        extra_kwargs = {
+            'client_name': {'help_text': 'Повне ім`я клієнта, що бронює ресурс.'},
+            'client_email': {'help_text': 'Електронна пошта для сповіщень.'},
+            'start_time': {'help_text': 'Дата та час початку бронювання (UTC).'},
+            'end_time': {'help_text': 'Дата та час завершення бронювання (UTC).'},
+        }
 
         def validate_start_time(self, value):
             if value < timezone.now():

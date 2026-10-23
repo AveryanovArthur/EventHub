@@ -1,3 +1,4 @@
+from drf_spectacular.utils import extend_schema, OpenApiParameter
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
@@ -12,6 +13,19 @@ from .serializers import (
 )
 
 class ResourceListView(APIView):
+    @extend_schema(
+        summary="Отримати список ресурсів",
+        description="Повертає відфільтрований список ресурсів із підтримкою пагінації, сортування та пошуку.",
+        parameters=[
+            OpenApiParameter('page', int, description='Номер сторінки', required=False),
+            OpenApiParameter('pageSize', int, description='Кількість елементів на сторінці', required=False),
+            OpenApiParameter('resourceTypeId', int, description='Фільтр за ID типу ресурсу', required=False),
+            OpenApiParameter('search', str, description='Пошук за назвою або описом', required=False),
+            OpenApiParameter('sortBy', str, description='Поле для сортування (name або created_at)', required=False),
+            OpenApiParameter('order', str, description='Напрям сортування (asc або desc)', required=False),
+        ],
+        responses={200: ResourceListSerializer(many=True)}
+    )
     def get(self, request):
         page = int(request.query_params.get('page', 1))
         page_size = min(int(request.query_params.get('pageSize', 20)), 100)
@@ -49,6 +63,11 @@ class ResourceListView(APIView):
         })
 
 class ResourceDetailView(APIView):
+    @extend_schema(
+        summary="Отримати деталі ресурсу",
+        description="Повертає детальну інформацію про конкретний ресурс разом із вкладеними бронями.",
+        responses={200: ResourceDetailSerializer}
+    )
     def get(self, request, pk):
         resource = get_object_or_404(
             Resource.objects.select_related('resource_type').prefetch_related('bookings'),
@@ -58,12 +77,23 @@ class ResourceDetailView(APIView):
         return Response(serializer.data)
 
 class ResourceBookingListCreateView(APIView):
+    @extend_schema(
+        summary="Отримати список броней ресурсу",
+        description="Повертає список усіх бронювань для конкретного ресурсу.",
+        responses={200: BookingSerializer(many=True)}
+    )
     def get(self, request, resource_id):
         resource = get_object_or_404(Resource, pk=resource_id)
         bookings = resource.bookings.all().order_by('-created_at')
         serializer = BookingSerializer(bookings, many=True)
         return Response(serializer.data)
 
+    @extend_schema(
+        summary="Створити бронювання",
+        description="Створює нове бронювання для вказаного ресурсу.",
+        request=CreateBookingSerializer,
+        responses={201: BookingSerializer, 400: dict}
+    )
     def post(self, request, resource_id):
         resource = get_object_or_404(Resource, pk=resource_id)
         serializer = CreateBookingSerializer(data=request.data)

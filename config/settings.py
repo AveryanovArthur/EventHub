@@ -38,6 +38,7 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'rest_framework',
+    'drf_spectacular',
     'events',
 ]
 
@@ -130,5 +131,14 @@ MAILERS = {
 
 
 REST_FRAMEWORK = {
+    'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
     'EXCEPTION_HANDLER': 'events.exceptions_handler.custom_exception_handler',
+}
+
+
+SPECTACULAR_SETTINGS = {
+    'TITLE': 'Resource Booking System API',
+    'DESCRIPTION': 'Платформа для бронювання ресурсів (переговорні, коворкінг, обладнання)',
+    'VERSION': '1.0.0',
+    'SERVE_INCLUDE_SCHEMA': False,
 }
