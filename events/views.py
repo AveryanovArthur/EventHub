@@ -2,6 +2,7 @@ from drf_spectacular.utils import extend_schema, OpenApiParameter
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
+from rest_framework.parsers import MultiPartParser, FormParser
 from django.db.models import Count, Q
 from django.shortcuts import get_object_or_404
 from .models import Resource, Booking
@@ -9,7 +10,8 @@ from .serializers import (
     ResourceListSerializer,
     ResourceDetailSerializer,
     BookingSerializer,
-    CreateBookingSerializer
+    CreateBookingSerializer,
+    ResourceCoverUploadSerializer
 )
 
 class ResourceListView(APIView):
@@ -54,7 +56,7 @@ class ResourceListView(APIView):
         end = start + page_size
         items = query[start:end]
 
-        serializer = ResourceListSerializer(items, many=True)
+        serializer = ResourceListSerializer(items, many=True, context={'request': request})
         return Response({
             'items': serializer.data,
             'total_count': total_count,
@@ -73,8 +75,56 @@ class ResourceDetailView(APIView):
             Resource.objects.select_related('resource_type').prefetch_related('bookings'),
             pk=pk
         )
-        serializer = ResourceDetailSerializer(resource)
+        serializer = ResourceDetailSerializer(resource, context={'request': request})
         return Response(serializer.data)
+
+class ResourceCoverView(APIView):
+    parser_classes = [MultiPartParser, FormParser]
+
+    @extend_schema(
+        summary="Завантажити або оновити обкладинку",
+        description="Завантажує нову обкладинку для вказаного ресурсу.",
+        request={
+            'multipart/form-data': {
+                'type': 'object',
+                'properties': {
+                    'cover_image': {
+                        'type': 'string',
+                        'format': 'binary',
+                        'description': 'Зображення обкладинки (JPEG або PNG)'
+                    }
+                },
+                'required': ['cover_image']
+            }
+        },
+        responses={200: ResourceDetailSerializer, 400: dict, 404: dict}
+    )
+    def post(self, request, pk):
+        resource = get_object_or_404(
+            Resource.objects.select_related('resource_type').prefetch_related('bookings'),
+            pk=pk
+        )
+        if resource.cover_image:
+            resource.cover_image.delete(save=False)
+        serializer = ResourceCoverUploadSerializer(resource, data=request.data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            detail_serializer = ResourceDetailSerializer(resource, context={'request': request})
+            return Response(detail_serializer.data, status=status.HTTP_200_OK)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    @extend_schema(
+        summary="Видалити обкладинку",
+        description="Видаляє поточну обкладинку ресурсу.",
+        responses={204: None, 404: dict}
+    )
+    def delete(self, request, pk):
+        resource = get_object_or_404(Resource, pk=pk)
+        if resource.cover_image:
+            resource.cover_image.delete(save=True)
+            resource.cover_image = None
+            resource.save()
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
 class ResourceBookingListCreateView(APIView):
     @extend_schema(
@@ -85,7 +135,7 @@ class ResourceBookingListCreateView(APIView):
     def get(self, request, resource_id):
         resource = get_object_or_404(Resource, pk=resource_id)
         bookings = resource.bookings.all().order_by('-created_at')
-        serializer = BookingSerializer(bookings, many=True)
+        serializer = BookingSerializer(bookings, many=True, context={'request': request})
         return Response(serializer.data)
 
     @extend_schema(
@@ -99,5 +149,5 @@ class ResourceBookingListCreateView(APIView):
         serializer = CreateBookingSerializer(data=request.data)
         if serializer.is_valid():
             booking = serializer.save(resource=resource)
-            return Response(BookingSerializer(booking).data, status=status.HTTP_201_CREATED)
+            return Response(BookingSerializer(booking, context={'request': request}).data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)

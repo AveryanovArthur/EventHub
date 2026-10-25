@@ -38,7 +38,7 @@ class ResourceListSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Resource
-        fields = ['id', 'name', 'description', 'price_per_hour', 'resource_type', 'resource_type_name', 'booking_count', 'created_at']
+        fields = ['id', 'name', 'description', 'price_per_hour', 'resource_type', 'resource_type_name', 'booking_count', 'cover_image', 'created_at']
 
 class ResourceDetailSerializer(serializers.ModelSerializer):
     resource_type_name = serializers.CharField(source='resource_type.name', read_only=True)
@@ -46,4 +46,24 @@ class ResourceDetailSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Resource
-        fields = ['id', 'name', 'description', 'price_per_hour', 'resource_type', 'resource_type_name', 'created_at', 'bookings']
+        fields = ['id', 'name', 'description', 'price_per_hour', 'resource_type', 'resource_type_name', 'cover_image', 'created_at', 'bookings']
+
+class ResourceCoverUploadSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Resource
+        fields = ['cover_image']
+        extra_kwargs = {
+            'cover_image': {'required': True, 'help_text': 'Зображення обкладинки (JPEG або PNG).'}
+        }
+
+    def validate_cover_image(self, value):
+        if not value:
+            raise serializers.ValidationError("File cannot be empty.")
+        if value.size > 5 * 1024 * 1024:
+            raise serializers.ValidationError("The cover image must not exceed 5 MB.")
+        
+        valid_types = ['image/jpeg', 'image/png', 'image/jpg']
+        if hasattr(value, 'content_type') and value.content_type not in valid_types:
+            raise serializers.ValidationError("Only JPEG and PNG cover images are supported.")
+        
+        return value
