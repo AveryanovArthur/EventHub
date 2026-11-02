@@ -3,6 +3,9 @@ from rest_framework import serializers
 from django.utils import timezone
 from .models import Resource, Booking, ResourceType
 
+BYTES_IN_MEGABYTE = 1024 * 1024
+ALLOWED_COVER_CONTENT_TYPES = ('image/jpeg', 'image/png', 'image/jpg')
+
 class BookingSerializer(serializers.ModelSerializer):
     class Meta:
         model = Booking
@@ -74,11 +77,10 @@ class ResourceCoverUploadSerializer(serializers.ModelSerializer):
         if not value:
             raise serializers.ValidationError("File cannot be empty.")
         max_size_mb = settings.MAX_FILE_SIZE_MB
-        if value.size > max_size_mb * 1024 * 1024:
+        if value.size > max_size_mb * BYTES_IN_MEGABYTE:
             raise serializers.ValidationError(f"The cover image must not exceed {max_size_mb} MB.")
 
-        valid_types = ['image/jpeg', 'image/png', 'image/jpg']
-        if hasattr(value, 'content_type') and value.content_type not in valid_types:
+        if hasattr(value, 'content_type') and value.content_type not in ALLOWED_COVER_CONTENT_TYPES:
             raise serializers.ValidationError("Only JPEG and PNG cover images are supported.")
 
         return value

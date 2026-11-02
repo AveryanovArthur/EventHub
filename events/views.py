@@ -4,11 +4,11 @@ from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.exceptions import NotFound
 from rest_framework.parsers import MultiPartParser, FormParser
-from . import queries
 from django.shortcuts import get_object_or_404
 from . import background
 from . import geocoding
-from .models import Resource, Booking
+from . import queries
+from .models import Resource
 from .serializers import (
     ResourceListSerializer,
     ResourceDetailSerializer,
@@ -19,6 +19,27 @@ from .serializers import (
     JobStatusSerializer,
     ResourceCoverUploadSerializer
 )
+
+DEFAULT_PAGE_SIZE = 20
+MAX_PAGE_SIZE = 100
+
+
+def get_resource_with_details(pk):
+    return get_object_or_404(
+        Resource.objects.select_related('resource_type').prefetch_related('bookings'),
+        pk=pk
+    )
+
+
+def resource_detail_data(resource, request):
+    return ResourceDetailSerializer(resource, context={'request': request}).data
+
+
+def read_pagination(query_params):
+    page = int(query_params.get('page', 1))
+    page_size = min(int(query_params.get('pageSize', DEFAULT_PAGE_SIZE)), MAX_PAGE_SIZE)
+    return page, page_size
+
 
 class ResourceListView(APIView):
     @extend_schema(
@@ -35,8 +56,7 @@ class ResourceListView(APIView):
         responses={200: ResourceListSerializer(many=True)}
     )
     def get(self, request):
-        page = int(request.query_params.get('page', 1))
-        page_size = min(int(request.query_params.get('pageSize', 20)), 100)
+        page, page_size = read_pagination(request.query_params)
 
         resource_type_id = request.query_params.get('resourceTypeId')
         search = request.query_params.get('search')
@@ -45,8 +65,8 @@ class ResourceListView(APIView):
 
         filtered = queries.filter_resources(resource_type_id, search)
         total_count = filtered.count()
+
         ordered = queries.order_resources(filtered, sort_by, order).select_related('resource_type')
-        
         start = (page - 1) * page_size
         items = queries.with_booking_count(ordered)[start:start + page_size]
 
@@ -72,8 +92,7 @@ class ResourceListView(APIView):
             latitude=coordinates.latitude if coordinates else None,
             longitude=coordinates.longitude if coordinates else None,
         )
-        detail = ResourceDetailSerializer(resource, context={'request': request})
-        return Response(detail.data, status=status.HTTP_201_CREATED)
+        return Response(resource_detail_data(resource, request), status=status.HTTP_201_CREATED)
 
 class ResourceDetailView(APIView):
     @extend_schema(
@@ -82,12 +101,8 @@ class ResourceDetailView(APIView):
         responses={200: ResourceDetailSerializer}
     )
     def get(self, request, pk):
-        resource = get_object_or_404(
-            Resource.objects.select_related('resource_type').prefetch_related('bookings'),
-            pk=pk
-        )
-        serializer = ResourceDetailSerializer(resource, context={'request': request})
-        return Response(serializer.data)
+        resource = get_resource_with_details(pk)
+        return Response(resource_detail_data(resource, request))
 
     @extend_schema(
         summary="Оновити ресурс",
@@ -108,8 +123,7 @@ class ResourceDetailView(APIView):
                 'longitude': coordinates.longitude if coordinates else None,
             }
         resource = serializer.save(**extra)
-        detail = ResourceDetailSerializer(resource, context={'request': request})
-        return Response(detail.data, status=status.HTTP_200_OK)
+        return Response(resource_detail_data(resource, request), status=status.HTTP_200_OK)
 
 class ResourceCoverView(APIView):
     parser_classes = [MultiPartParser, FormParser]
@@ -133,17 +147,13 @@ class ResourceCoverView(APIView):
         responses={200: ResourceDetailSerializer, 400: dict, 404: dict}
     )
     def post(self, request, pk):
-        resource = get_object_or_404(
-            Resource.objects.select_related('resource_type').prefetch_related('bookings'),
-            pk=pk
-        )
+        resource = get_resource_with_details(pk)
         if resource.cover_image:
             resource.cover_image.delete(save=False)
         serializer = ResourceCoverUploadSerializer(resource, data=request.data, partial=True)
         if serializer.is_valid():
             serializer.save()
-            detail_serializer = ResourceDetailSerializer(resource, context={'request': request})
-            return Response(detail_serializer.data, status=status.HTTP_200_OK)
+            return Response(resource_detail_data(resource, request), status=status.HTTP_200_OK)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
     @extend_schema(
