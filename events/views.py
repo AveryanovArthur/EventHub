@@ -148,10 +148,10 @@ class ResourceCoverView(APIView):
     )
     def post(self, request, pk):
         resource = get_resource_with_details(pk)
-        if resource.cover_image:
-            resource.cover_image.delete(save=False)
         serializer = ResourceCoverUploadSerializer(resource, data=request.data, partial=True)
         if serializer.is_valid():
+            if resource.cover_image:
+                resource.cover_image.delete(save=False)
             serializer.save()
             return Response(resource_detail_data(resource, request), status=status.HTTP_200_OK)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)

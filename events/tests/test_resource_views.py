@@ -130,3 +130,30 @@ def test_booking_create_for_missing_resource_returns_404(client, db):
     response = client.post('/api/resources/99999/bookings/', {}, content_type='application/json')
 
     assert response.status_code == 404
+
+
+def test_invalid_upload_keeps_previous_cover(client, resource):
+    upload_cover(client, resource.id, image_file('first.png'))
+    resource.refresh_from_db()
+    old_path = resource.cover_image.path
+
+    response = upload_cover(client, resource.id, image_file('anim.gif', 'GIF', 'image/gif'))
+
+    assert response.status_code == 400
+    resource.refresh_from_db()
+    assert resource.cover_image.path == old_path
+    assert os.path.exists(old_path)
+
+
+def test_valid_upload_replaces_previous_cover(client, resource):
+    upload_cover(client, resource.id, image_file('first.png'))
+    resource.refresh_from_db()
+    old_path = resource.cover_image.path
+
+    response = upload_cover(client, resource.id, image_file('second.png'))
+
+    assert response.status_code == 200
+    resource.refresh_from_db()
+    assert resource.cover_image.path != old_path
+    assert os.path.exists(resource.cover_image.path)
+    assert not os.path.exists(old_path)
