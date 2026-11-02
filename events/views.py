@@ -7,10 +7,12 @@ from rest_framework.parsers import MultiPartParser, FormParser
 from django.db.models import Count, Q
 from django.shortcuts import get_object_or_404
 from . import background
+from . import geocoding
 from .models import Resource, Booking
 from .serializers import (
     ResourceListSerializer,
     ResourceDetailSerializer,
+    ResourceWriteSerializer,
     BookingSerializer,
     CreateBookingSerializer,
     CreateBookingResponseSerializer,
@@ -35,7 +37,7 @@ class ResourceListView(APIView):
     def get(self, request):
         page = int(request.query_params.get('page', 1))
         page_size = min(int(request.query_params.get('pageSize', 20)), 100)
-        
+
         resource_type_id = request.query_params.get('resourceTypeId')
         search = request.query_params.get('search')
         sort_by = request.query_params.get('sortBy', 'name').lower()
@@ -68,6 +70,23 @@ class ResourceListView(APIView):
             'page_size': page_size
         })
 
+    @extend_schema(
+        summary="Створити ресурс",
+        description="Створює ресурс і намагається отримати координати адреси через зовнішнє геокодування. Якщо сервіс недоступний, ресурс зберігається без координат.",
+        request=ResourceWriteSerializer,
+        responses={201: ResourceDetailSerializer, 400: dict}
+    )
+    def post(self, request):
+        serializer = ResourceWriteSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        coordinates = geocoding.geocode_address(serializer.validated_data.get('address', ''))
+        resource = serializer.save(
+            latitude=coordinates.latitude if coordinates else None,
+            longitude=coordinates.longitude if coordinates else None,
+        )
+        detail = ResourceDetailSerializer(resource, context={'request': request})
+        return Response(detail.data, status=status.HTTP_201_CREATED)
+
 class ResourceDetailView(APIView):
     @extend_schema(
         summary="Отримати деталі ресурсу",
@@ -81,6 +100,28 @@ class ResourceDetailView(APIView):
         )
         serializer = ResourceDetailSerializer(resource, context={'request': request})
         return Response(serializer.data)
+
+    @extend_schema(
+        summary="Оновити ресурс",
+        description="Оновлює ресурс. Координати перераховуються лише якщо адреса змінилася.",
+        request=ResourceWriteSerializer,
+        responses={200: ResourceDetailSerializer, 400: dict, 404: dict}
+    )
+    def put(self, request, pk):
+        resource = get_object_or_404(Resource, pk=pk)
+        serializer = ResourceWriteSerializer(resource, data=request.data)
+        serializer.is_valid(raise_exception=True)
+        new_address = serializer.validated_data.get('address', '')
+        extra = {}
+        if not geocoding.addresses_match(resource.address, new_address):
+            coordinates = geocoding.geocode_address(new_address)
+            extra = {
+                'latitude': coordinates.latitude if coordinates else None,
+                'longitude': coordinates.longitude if coordinates else None,
+            }
+        resource = serializer.save(**extra)
+        detail = ResourceDetailSerializer(resource, context={'request': request})
+        return Response(detail.data, status=status.HTTP_200_OK)
 
 class ResourceCoverView(APIView):
     parser_classes = [MultiPartParser, FormParser]

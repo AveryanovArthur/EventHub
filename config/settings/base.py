@@ -1,6 +1,7 @@
 from pathlib import Path
 
 import environ
+from urllib.parse import urlparse
 from django.core.exceptions import ImproperlyConfigured
 
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
@@ -148,3 +149,51 @@ CONFIRMATION_SIMULATE_FAILURES = False
 
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
+
+
+def build_geocoding_settings():
+    base_url = env('GEOCODING_BASE_URL', default='https://api.geoapify.com/').strip()
+    parsed = urlparse(base_url)
+    if parsed.scheme != 'https' or not parsed.netloc:
+        raise ImproperlyConfigured('GEOCODING_BASE_URL must be an absolute HTTPS URL.')
+
+    api_key = env('GEOCODING_API_KEY', default='').strip()
+    if not api_key:
+        raise ImproperlyConfigured(
+            'GEOCODING_API_KEY is required. Use .env locally or an environment variable in deployed environments.'
+        )
+
+    timeout_seconds = env.int('GEOCODING_TIMEOUT_SECONDS', default=5)
+    if not 1 <= timeout_seconds <= 60:
+        raise ImproperlyConfigured('GEOCODING_TIMEOUT_SECONDS must be between 1 and 60.')
+
+    cache_minutes = env.int('GEOCODING_CACHE_MINUTES', default=60)
+    negative_cache_minutes = env.int('GEOCODING_NEGATIVE_CACHE_MINUTES', default=10)
+    cache_size = env.int('GEOCODING_CACHE_SIZE', default=1000)
+    if cache_minutes < 1 or negative_cache_minutes < 1 or cache_size < 1:
+        raise ImproperlyConfigured('Geocoding cache durations and size must be positive.')
+
+    return {
+        'BASE_URL': base_url,
+        'API_KEY': api_key,
+        'TIMEOUT_SECONDS': timeout_seconds,
+        'CACHE_SECONDS': cache_minutes * 60,
+        'NEGATIVE_CACHE_SECONDS': negative_cache_minutes * 60,
+        'CACHE_SIZE': cache_size,
+        'LANGUAGE': env('GEOCODING_LANGUAGE', default='uk'),
+        'COUNTRY_CODE': env('GEOCODING_COUNTRY_CODE', default='ua'),
+    }
+
+
+GEOCODING = build_geocoding_settings()
+
+CACHES = {
+    'default': {
+        'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+    },
+    'geocoding': {
+        'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+        'LOCATION': 'geocoding',
+        'OPTIONS': {'MAX_ENTRIES': GEOCODING['CACHE_SIZE']},
+    },
+}

@@ -11,6 +11,9 @@ class Resource(models.Model):
     description = models.TextField(blank=True, null=True)
     price_per_hour = models.DecimalField(max_digits=10, decimal_places=2)
     resource_type = models.ForeignKey(ResourceType, on_delete=models.RESTRICT, related_name='resources')
+    address = models.CharField(max_length=300, blank=True, default='')
+    latitude = models.FloatField(null=True, blank=True)
+    longitude = models.FloatField(null=True, blank=True)
     cover_image = models.ImageField(upload_to='covers/', null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 

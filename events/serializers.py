@@ -1,7 +1,7 @@
+from django.conf import settings
 from rest_framework import serializers
 from django.utils import timezone
 from .models import Resource, Booking, ResourceType
-from django.conf import settings
 
 class BookingSerializer(serializers.ModelSerializer):
     class Meta:
@@ -33,13 +33,21 @@ class CreateBookingSerializer(serializers.ModelSerializer):
                 })
         return data
 
+class CreateBookingResponseSerializer(serializers.Serializer):
+    booking = BookingSerializer()
+    job_id = serializers.UUIDField()
+
+class JobStatusSerializer(serializers.Serializer):
+    job_id = serializers.UUIDField()
+    status = serializers.ChoiceField(choices=['pending', 'processing', 'done', 'failed', 'cancelled'])
+
 class ResourceListSerializer(serializers.ModelSerializer):
     resource_type_name = serializers.CharField(source='resource_type.name', read_only=True)
     booking_count = serializers.IntegerField(read_only=True)
 
     class Meta:
         model = Resource
-        fields = ['id', 'name', 'description', 'price_per_hour', 'resource_type', 'resource_type_name', 'booking_count', 'cover_image', 'created_at']
+        fields = ['id', 'name', 'description', 'price_per_hour', 'resource_type', 'resource_type_name', 'address', 'latitude', 'longitude', 'booking_count', 'cover_image', 'created_at']
 
 class ResourceDetailSerializer(serializers.ModelSerializer):
     resource_type_name = serializers.CharField(source='resource_type.name', read_only=True)
@@ -47,7 +55,12 @@ class ResourceDetailSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Resource
-        fields = ['id', 'name', 'description', 'price_per_hour', 'resource_type', 'resource_type_name', 'cover_image', 'created_at', 'bookings']
+        fields = ['id', 'name', 'description', 'price_per_hour', 'resource_type', 'resource_type_name', 'address', 'latitude', 'longitude', 'cover_image', 'created_at', 'bookings']
+
+class ResourceWriteSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Resource
+        fields = ['name', 'description', 'price_per_hour', 'resource_type', 'address']
 
 class ResourceCoverUploadSerializer(serializers.ModelSerializer):
     class Meta:
@@ -69,12 +82,3 @@ class ResourceCoverUploadSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("Only JPEG and PNG cover images are supported.")
 
         return value
-
-class CreateBookingResponseSerializer(serializers.Serializer):
-    booking = BookingSerializer()
-    job_id = serializers.UUIDField()
-
-
-class JobStatusSerializer(serializers.Serializer):
-    job_id = serializers.UUIDField()
-    status = serializers.ChoiceField(choices=['pending', 'processing', 'done', 'failed', 'cancelled'])

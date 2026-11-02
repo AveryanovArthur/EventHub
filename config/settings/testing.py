@@ -1,6 +1,7 @@
 import os
 
 os.environ.setdefault('SECRET_KEY', 'test-only-secret-key')
+os.environ.setdefault('GEOCODING_API_KEY', 'test-geocoding-key')
 os.environ['DATABASE_URL'] = 'sqlite://:memory:'
 
 from .base import *
