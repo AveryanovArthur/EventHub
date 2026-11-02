@@ -83,6 +83,7 @@ INSTALLED_APPS = [
     'rest_framework',
     'drf_spectacular',
     'events',
+    'accounts',
 ]
 
 MIDDLEWARE = [
@@ -197,3 +198,5 @@ CACHES = {
         'OPTIONS': {'MAX_ENTRIES': GEOCODING['CACHE_SIZE']},
     },
 }
+
+PASSWORD_HASH_ROUNDS = 12

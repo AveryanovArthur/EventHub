@@ -9,6 +9,7 @@ from events.views import JobStatusView
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('api/', include('events.urls')),
+    path('api/', include('accounts.urls')),
     path('api/jobs/<uuid:job_id>/', JobStatusView.as_view(), name='job-status'),
 ]
 
