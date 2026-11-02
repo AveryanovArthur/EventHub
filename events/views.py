@@ -4,7 +4,7 @@ from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.exceptions import NotFound
 from rest_framework.parsers import MultiPartParser, FormParser
-from django.db.models import Count, Q
+from . import queries
 from django.shortcuts import get_object_or_404
 from . import background
 from . import geocoding
@@ -43,24 +43,12 @@ class ResourceListView(APIView):
         sort_by = request.query_params.get('sortBy', 'name').lower()
         order = request.query_params.get('order', 'asc').lower()
 
-        query = Resource.objects.select_related('resource_type').annotate(booking_count=Count('bookings'))
-
-        if resource_type_id:
-            query = query.filter(resource_type_id=resource_type_id)
-
-        if search:
-            query = query.filter(Q(name__icontains=search) | Q(description__icontains=search))
-
-        sort_field = 'name' if sort_by == 'name' else 'created_at'
-        if order == 'desc':
-            sort_field = f'-{sort_field}'
-
-        query = query.order_by(sort_field, 'id')
-
-        total_count = query.count()
+        filtered = queries.filter_resources(resource_type_id, search)
+        total_count = filtered.count()
+        ordered = queries.order_resources(filtered, sort_by, order).select_related('resource_type')
+        
         start = (page - 1) * page_size
-        end = start + page_size
-        items = query[start:end]
+        items = queries.with_booking_count(ordered)[start:start + page_size]
 
         serializer = ResourceListSerializer(items, many=True, context={'request': request})
         return Response({

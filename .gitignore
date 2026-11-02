@@ -11,3 +11,4 @@ obj/
 .pytest_cache/
 media/
 media_test/
+*.sqlite3

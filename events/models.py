@@ -17,6 +17,11 @@ class Resource(models.Model):
     cover_image = models.ImageField(upload_to='covers/', null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
+    class Meta:
+        indexes = [
+            models.Index(fields=['resource_type', 'name', 'id'], name='ix_resource_type_name_id'),
+        ]
+
     def __str__(self):
         return self.name
 
