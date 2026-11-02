@@ -33,7 +33,8 @@ class TestResourceBookingAPI:
         response = client.post(self.url, payload, content_type='application/json')
         
         assert response.status_code == status.HTTP_201_CREATED
-        assert response.data["client_name"] == "Alex"
+        assert response.data["booking"]["client_name"] == "Alex"
+        assert response.data["job_id"]
         assert Booking.objects.count() == 1
         assert Booking.objects.first().resource == self.resource
 

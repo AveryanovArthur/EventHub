@@ -1,6 +1,7 @@
 from rest_framework import serializers
 from django.utils import timezone
 from .models import Resource, Booking, ResourceType
+from django.conf import settings
 
 class BookingSerializer(serializers.ModelSerializer):
     class Meta:
@@ -59,11 +60,21 @@ class ResourceCoverUploadSerializer(serializers.ModelSerializer):
     def validate_cover_image(self, value):
         if not value:
             raise serializers.ValidationError("File cannot be empty.")
-        if value.size > 5 * 1024 * 1024:
-            raise serializers.ValidationError("The cover image must not exceed 5 MB.")
-        
+        max_size_mb = settings.MAX_FILE_SIZE_MB
+        if value.size > max_size_mb * 1024 * 1024:
+            raise serializers.ValidationError(f"The cover image must not exceed {max_size_mb} MB.")
+
         valid_types = ['image/jpeg', 'image/png', 'image/jpg']
         if hasattr(value, 'content_type') and value.content_type not in valid_types:
             raise serializers.ValidationError("Only JPEG and PNG cover images are supported.")
-        
+
         return value
+
+class CreateBookingResponseSerializer(serializers.Serializer):
+    booking = BookingSerializer()
+    job_id = serializers.UUIDField()
+
+
+class JobStatusSerializer(serializers.Serializer):
+    job_id = serializers.UUIDField()
+    status = serializers.ChoiceField(choices=['pending', 'processing', 'done', 'failed', 'cancelled'])

@@ -2,15 +2,19 @@ from drf_spectacular.utils import extend_schema, OpenApiParameter
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
+from rest_framework.exceptions import NotFound
 from rest_framework.parsers import MultiPartParser, FormParser
 from django.db.models import Count, Q
 from django.shortcuts import get_object_or_404
+from . import background
 from .models import Resource, Booking
 from .serializers import (
     ResourceListSerializer,
     ResourceDetailSerializer,
     BookingSerializer,
     CreateBookingSerializer,
+    CreateBookingResponseSerializer,
+    JobStatusSerializer,
     ResourceCoverUploadSerializer
 )
 
@@ -140,14 +144,33 @@ class ResourceBookingListCreateView(APIView):
 
     @extend_schema(
         summary="Створити бронювання",
-        description="Створює нове бронювання для вказаного ресурсу.",
+        description="Створює бронювання та ставить підтвердження у фонову чергу. Повертає job_id для перевірки стану.",
         request=CreateBookingSerializer,
-        responses={201: BookingSerializer, 400: dict}
+        responses={201: CreateBookingResponseSerializer, 400: dict}
     )
     def post(self, request, resource_id):
         resource = get_object_or_404(Resource, pk=resource_id)
         serializer = CreateBookingSerializer(data=request.data)
         if serializer.is_valid():
             booking = serializer.save(resource=resource)
-            return Response(BookingSerializer(booking, context={'request': request}).data, status=status.HTTP_201_CREATED)
+            job_id = background.enqueue_confirmation(booking.client_email)
+            return Response(
+                {
+                    'booking': BookingSerializer(booking, context={'request': request}).data,
+                    'job_id': job_id,
+                },
+                status=status.HTTP_201_CREATED,
+            )
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+class JobStatusView(APIView):
+    @extend_schema(
+        summary="Отримати стан фонової задачі",
+        description="Повертає поточний стан фонової задачі за її ідентифікатором.",
+        responses={200: JobStatusSerializer, 404: dict}
+    )
+    def get(self, request, job_id):
+        job_status = background.job_status_store.get_status(job_id)
+        if job_status is None:
+            raise NotFound(f"Background job with id '{job_id}' does not exist.")
+        return Response({'job_id': job_id, 'status': job_status.value})
